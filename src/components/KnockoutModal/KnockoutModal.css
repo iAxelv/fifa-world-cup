@@ -1,0 +1,273 @@
+.knockout-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+}
+
+.knockout-content {
+  background-color: rgba(10, 15, 30, 0.75);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  width: 98vw;
+  height: 96vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+}
+
+.knockout-close-button {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.knockout-close-button svg {
+  width: 32px;
+  height: 32px;
+}
+
+.knockout-close-button:hover {
+  color: white;
+  transform: scale(1.1);
+}
+
+.knockout-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 2.2rem;
+  color: white;
+  margin: 25px 0 0 0;
+  text-align: center;
+  text-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+  letter-spacing: 2px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.knockout-viewport {
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+  cursor: grab;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.knockout-viewport:active {
+  cursor: grabbing;
+}
+
+.knockout-viewport.is-dragging,
+.knockout-viewport.is-dragging * {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing;
+}
+
+.knockout-board {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: stretch;
+  gap: 36px;
+  padding: 80px;
+  will-change: transform;
+  transform-origin: center center;
+}
+
+.knockout-side {
+  display: flex;
+  flex-direction: row;
+  gap: 36px;
+}
+
+.knockout-round {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 188px;
+}
+
+.knockout-matches-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  flex: 1;
+  width: 100%;
+  position: relative;
+  overflow: visible;
+}
+
+.knockout-spine {
+  position: absolute;
+  width: 2px;
+  background-color: rgba(255, 255, 255, 0.33);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.14);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.knockout-spine-right {
+  left: calc(100% + 18px);
+}
+
+.knockout-spine-left {
+  right: calc(100% + 18px);
+}
+
+.knockout-round-title {
+  font-family: 'Montserrat', sans-serif;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin: 0 0 25px 0;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.knockout-gold {
+  color: #e1b12c;
+  text-shadow: 0 0 12px rgba(225, 177, 44, 0.6);
+}
+
+.knockout-bronze {
+  color: #cd7f32;
+  text-shadow: 0 0 12px rgba(205, 127, 50, 0.6);
+}
+
+.knockout-center {
+  display: flex;
+  flex-direction: column;
+  min-width: 210px;
+  margin: 0;
+  position: relative;
+}
+
+.knockout-final-group {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.knockout-center-title {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  margin-bottom: 15px;
+}
+
+.knockout-match {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.35));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.2s ease;
+  position: relative;
+  overflow: visible;
+  margin: 11px 0;
+}
+
+.knockout-match-datetime {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.84);
+  letter-spacing: 0.4px;
+  text-align: center;
+  padding: 7px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.knockout-match:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.knockout-team {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  color: white;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.knockout-team:first-child {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.knockout-team-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 126px;
+}
+
+.knockout-team-score {
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 3px 10px;
+  border-radius: 6px;
+  min-width: 28px;
+  text-align: center;
+}
+
+.knockout-match.line-out-right::after,
+.knockout-match.line-in-left::before,
+.knockout-match.line-out-left::before,
+.knockout-match.line-in-right::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  border-top: 2px solid rgba(255, 255, 255, 0.33);
+  pointer-events: none;
+}
+
+.knockout-match.line-out-right::after {
+  left: 100%;
+}
+
+.knockout-match.line-in-left::before {
+  right: 100%;
+}
+
+.knockout-match.line-out-left::before {
+  right: 100%;
+}
+
+.knockout-match.line-in-right::after {
+  left: 100%;
+}
