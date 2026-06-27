@@ -14,8 +14,9 @@ interface KnockoutModalProps {
 const MIN_SCALE = 0.7
 const MAX_SCALE = 2.8
 const MOBILE_BREAKPOINT = 760
-const MOBILE_MIN_SCALE = 0.28
+const MOBILE_MIN_SCALE = 0.45
 const MOBILE_MAX_SCALE = 2.3
+const DRAG_MOVE_THRESHOLD = 8
 const LOCAL_PREDICTIONS_KEY = 'worldcup_local_predictions'
 const LOCAL_KNOCKOUT_PREDICTIONS_KEY = 'worldcup_local_knockout_predictions'
 
@@ -198,6 +199,7 @@ const readLocalKnockoutPredictions = (): KnockoutPredictions => {
       homePenalties?: unknown
       awayPenalties?: unknown
     }>
+    
     return Object.entries(parsed).reduce((acc, [matchId, values]) => {
       if (
         typeof values.homeGoals === 'number' &&
@@ -239,19 +241,24 @@ const resolveWinnerAndLoser = (
   if (home.id === 'tbd' || away.id === 'tbd' || home.isPlaceholder || away.isPlaceholder) {
     return null
   }
+  
   const homeTeam = { id: home.id, name: home.name } as Team
   const awayTeam = { id: away.id, name: away.name } as Team
+  
   if (result.homeGoals > result.awayGoals) {
     return { winner: homeTeam, loser: awayTeam }
   }
   if (result.awayGoals > result.homeGoals) {
     return { winner: awayTeam, loser: homeTeam }
   }
+  
   const homePens = result.homePenalties
   const awayPens = result.awayPenalties
+  
   if (homePens === null || homePens === undefined || awayPens === null || awayPens === undefined || homePens === awayPens) {
     return null
   }
+  
   return homePens > awayPens
     ? { winner: homeTeam, loser: awayTeam }
     : { winner: awayTeam, loser: homeTeam }
@@ -309,11 +316,14 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [isMobile, setIsMobile] = useState(() => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches)
+  
   const [officialResults, setOfficialResults] = useState<Record<string, any>>({})
   const [localPredictions, setLocalPredictions] = useState<Record<string, any>>({})
   const [localKnockoutPredictions, setLocalKnockoutPredictions] = useState<KnockoutPredictions>(() => readLocalKnockoutPredictions())
+  
   const [editingMatch, setEditingMatch] = useState<KnockoutMatch | null>(null)
   const [editingDraft, setEditingDraft] = useState<EditingDraft>({ homeGoals: '', awayGoals: '', homePenalties: '', awayPenalties: '' })
+  
   const viewportRef = useRef<HTMLDivElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
   const dragStart = useRef({ x: 0, y: 0 })
@@ -351,7 +361,6 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
     const handleChange = (event: MediaQueryListEvent) => {
       setIsMobile(event.matches)
     }
-
     setIsMobile(mediaQuery.matches)
     mediaQuery.addEventListener('change', handleChange)
     return () => mediaQuery.removeEventListener('change', handleChange)
@@ -391,26 +400,26 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
       acc[groupKey] = initialGroups[groupKey].map(cloneTeamWithZeroStats)
       return acc
     }, {} as Record<string, Team[]>)
-
+    
     Object.keys(liveMatchesData).forEach((groupKey) => {
       const teamsById = base[groupKey].reduce((acc, team) => {
         acc[team.id] = team
         return acc
       }, {} as Record<string, Team>)
-
+      
       liveMatchesData[groupKey].forEach((match) => {
         if (match.homeGoals === null || match.awayGoals === null) return
         const homeTeam = teamsById[match.home.id]
         const awayTeam = teamsById[match.away.id]
         if (!homeTeam || !awayTeam) return
-
+        
         homeTeam.pj += 1
         awayTeam.pj += 1
         homeTeam.gf += match.homeGoals
         homeTeam.gc += match.awayGoals
         awayTeam.gf += match.awayGoals
         awayTeam.gc += match.homeGoals
-
+        
         if (match.homeGoals > match.awayGoals) {
           homeTeam.g += 1
           awayTeam.p += 1
@@ -435,14 +444,14 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
     const firsts: Record<string, Team> = {}
     const seconds: Record<string, Team> = {}
     const thirds: Array<Team & { group: string }> = []
-     
+    
     Object.keys(liveGroupsData).forEach(group => {
       const teams = liveGroupsData[group]
       if (teams[0]) firsts[group] = teams[0]
       if (teams[1]) seconds[group] = teams[1]
       if (teams[2]) thirds.push({ ...teams[2], group })
     })
-     
+    
     const bestThirds = (sortTeams(thirds) as Array<Team & { group: string }>).slice(0, 8)
     return { firsts, seconds, bestThirds }
   }, [liveGroupsData])
@@ -451,7 +460,7 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
     const thirdsAssignments = assignThirds(standings.bestThirds)
     const knockoutResults: Record<string, Team> = {}
     const knockoutLosers: Record<string, Team> = {}
-
+    
     const resolveTeam = (placeholder: string): KnockoutTeam => {
       if (placeholder.startsWith('1')) {
         const group = placeholder[1]
@@ -474,7 +483,7 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
       return matches.map(match => {
         let home: KnockoutTeam
         let away: KnockoutTeam
-
+        
         const homeReference = parseReference(match.home.name)
         if (homeReference?.type === 'W') {
           const winner = knockoutResults[homeReference.prevId]
@@ -485,7 +494,7 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
         } else {
           home = resolveTeam(match.home.name)
         }
-
+        
         const awayReference = parseReference(match.away.name)
         if (awayReference?.type === 'W') {
           const winner = knockoutResults[awayReference.prevId]
@@ -496,14 +505,15 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
         } else {
           away = resolveTeam(match.away.name)
         }
-
+        
         const official = officialResults[match.id]
         const local = localKnockoutPredictions[match.id]
+        
         const homeGoals = (official?.homeGoals !== undefined && official?.homeGoals !== null) ? official.homeGoals : (local?.homeGoals ?? null)
         const awayGoals = (official?.awayGoals !== undefined && official?.awayGoals !== null) ? official.awayGoals : (local?.awayGoals ?? null)
         const homePenalties = (official?.homePenalties !== undefined && official?.homePenalties !== null) ? official.homePenalties : (local?.homePenalties ?? null)
         const awayPenalties = (official?.awayPenalties !== undefined && official?.awayPenalties !== null) ? official.awayPenalties : (local?.awayPenalties ?? null)
-
+        
         if (homeGoals !== null && awayGoals !== null) {
           const resolved = resolveWinnerAndLoser(home, away, {
             homeGoals,
@@ -516,7 +526,7 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
             knockoutLosers[match.id] = resolved.loser
           }
         }
-
+        
         return { ...match, home, away, homeGoals, awayGoals, homePenalties, awayPenalties }
       })
     }
@@ -603,8 +613,10 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
       )
       return
     }
+    
     const resolved = resolveWinnerAndLoser(match.home, match.away, result)
     const winner = resolved ? resolved.winner.id : null
+    
     await setDoc(
       doc(db, 'worldcup', match.id),
       {
@@ -622,16 +634,18 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
   const buildResultFromDraft = useCallback((draft: EditingDraft): DraftValidation => {
     const homeGoals = parseOptionalGoal(draft.homeGoals)
     const awayGoals = parseOptionalGoal(draft.awayGoals)
+    
     if (homeGoals === null && awayGoals === null) {
       return { result: null, error: null }
     }
+    
     if (homeGoals === null || awayGoals === null) {
       return { result: null, error: 'Completa ambos marcadores o deja ambos vacios.' }
     }
-
+    
     const homePenalties = parseOptionalGoal(draft.homePenalties)
     const awayPenalties = parseOptionalGoal(draft.awayPenalties)
-
+    
     if (homeGoals !== awayGoals) {
       return {
         result: {
@@ -643,9 +657,11 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
         error: null
       }
     }
+    
     if ((homePenalties === null) !== (awayPenalties === null)) {
       return { result: null, error: 'Si empatan, debes completar ambos penales.' }
     }
+    
     if (homePenalties === null && awayPenalties === null) {
       return {
         result: {
@@ -657,9 +673,11 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
         error: null
       }
     }
+    
     if (homePenalties === awayPenalties) {
       return { result: null, error: 'Los penales no pueden terminar empatados.' }
     }
+    
     return {
       result: {
         homeGoals,
@@ -677,8 +695,10 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
       match.away.id !== 'tbd' &&
       !match.home.isPlaceholder &&
       !match.away.isPlaceholder
+      
     if (!hasTeamsReady) return false
     if (isAdmin) return true
+    
     return !(officialResults[match.id]?.homeGoals !== null && officialResults[match.id]?.homeGoals !== undefined)
   }, [isAdmin, officialResults])
 
@@ -708,14 +728,17 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
   const handleSaveMatch = async () => {
     if (!editingMatch) return
     const validation = buildResultFromDraft(editingDraft)
+    
     if (validation.error) {
       return
     }
+    
     if (isAdmin) {
       await updateOfficialKnockoutResult(editingMatch, validation.result)
     } else {
       updateLocalKnockoutPrediction(editingMatch.id, validation.result)
     }
+    
     closeEditor()
   }
 
@@ -727,8 +750,10 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
     }
     const scaledWidth = board.offsetWidth * nextScale
     const scaledHeight = board.offsetHeight * nextScale
-    const maxOffsetX = Math.max((scaledWidth - viewport.clientWidth) / 2, 0)
-    const maxOffsetY = Math.max((scaledHeight - viewport.clientHeight) / 2, 0)
+    
+    const maxOffsetX = Math.max((scaledWidth - viewport.clientWidth) / 2, 0) + 120
+    const maxOffsetY = Math.max((scaledHeight - viewport.clientHeight) / 2, 0) + 180
+    
     return {
       x: Math.min(Math.max(nextPosition.x, -maxOffsetX), maxOffsetX),
       y: Math.min(Math.max(nextPosition.y, -maxOffsetY), maxOffsetY)
@@ -741,16 +766,15 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
     if (!viewport || !board) {
       return
     }
-
     const boardWidth = board.offsetWidth
     const boardHeight = board.offsetHeight
     if (boardWidth <= 0 || boardHeight <= 0) {
       return
     }
-
-    const fitScaleRaw = Math.min(viewport.clientWidth / boardWidth, viewport.clientHeight / boardHeight)
+    
     const { min, max } = getScaleBounds(true)
-    const fitScale = Math.min(Math.max(fitScaleRaw * 0.98, min), max)
+    const fitScale = Math.min(Math.max(0.55, min), max)
+    
     setScale(fitScale)
     setPosition({ x: 0, y: 0 })
   }, [getScaleBounds])
@@ -760,13 +784,11 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
     if (!viewport) {
       return
     }
-
     const updateLayout = () => {
       if (isMobile) {
         fitBoardForMobile()
         return
       }
-
       const { min, max } = getScaleBounds(false)
       setScale((currentScale) => {
         const bounded = Math.min(Math.max(currentScale, min), max)
@@ -774,7 +796,7 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
         return bounded
       })
     }
-
+    
     const frame = window.requestAnimationFrame(updateLayout)
     window.addEventListener('resize', updateLayout)
     return () => {
@@ -790,8 +812,10 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
     e.preventDefault()
     const zoomFactor = 0.08
     const newScale = e.deltaY < 0 ? scale + zoomFactor : scale - zoomFactor
+    
     const { min, max } = getScaleBounds(false)
     const boundedScale = Math.min(Math.max(newScale, min), max)
+    
     setScale(boundedScale)
     setPosition((current) => clampPosition(current, boundedScale))
   }
@@ -844,12 +868,12 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
     if (!isMobile) {
       return
     }
-
     if (event.touches.length === 1) {
       const touch = event.touches[0]
       dragMovedRef.current = false
       pinchStartDistanceRef.current = null
       pinchStartScaleRef.current = scale
+      
       setIsDragging(true)
       dragStart.current = {
         x: touch.clientX - position.x,
@@ -857,10 +881,10 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
       }
       return
     }
-
     if (event.touches.length === 2) {
       const first = event.touches[0]
       const second = event.touches[1]
+      
       dragMovedRef.current = true
       setIsDragging(false)
       pinchStartDistanceRef.current = getTouchDistance(first, second)
@@ -872,24 +896,26 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
     if (!isMobile) {
       return
     }
-
     if (event.touches.length === 2) {
       event.preventDefault()
       const first = event.touches[0]
       const second = event.touches[1]
       const currentDistance = getTouchDistance(first, second)
+      
       const startDistance = pinchStartDistanceRef.current
       if (!startDistance || startDistance <= 0) {
         return
       }
+      
       const rawScale = pinchStartScaleRef.current * (currentDistance / startDistance)
       const { min, max } = getScaleBounds(true)
       const boundedScale = Math.min(Math.max(rawScale, min), max)
+      
       setScale(boundedScale)
       setPosition((current) => clampPosition(current, boundedScale))
       return
     }
-
+    
     if (event.touches.length === 1 && isDragging) {
       event.preventDefault()
       const touch = event.touches[0]
@@ -897,9 +923,14 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
         x: touch.clientX - dragStart.current.x,
         y: touch.clientY - dragStart.current.y
       }
-      if (Math.abs(nextPosition.x - position.x) > 3 || Math.abs(nextPosition.y - position.y) > 3) {
+      
+      if (
+        Math.abs(nextPosition.x - position.x) > DRAG_MOVE_THRESHOLD ||
+        Math.abs(nextPosition.y - position.y) > DRAG_MOVE_THRESHOLD
+      ) {
         dragMovedRef.current = true
       }
+      
       setPosition(clampPosition(nextPosition, scale))
     }
   }
@@ -908,13 +939,11 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
     if (!isMobile) {
       return
     }
-
     if (event.touches.length === 0) {
       setIsDragging(false)
       pinchStartDistanceRef.current = null
       return
     }
-
     if (event.touches.length === 1) {
       const touch = event.touches[0]
       setIsDragging(true)
