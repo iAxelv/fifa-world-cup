@@ -15,11 +15,8 @@
 }
 
 .menu-container {
-  position: absolute;
-  top: 58%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   width: 100%;
+  margin-top: 32px;
   padding-inline: clamp(10px, 2.4vw, 24px);
   box-sizing: border-box;
   display: flex;
@@ -155,6 +152,25 @@
   max-height: min(52svh, 430px);
   overflow-y: auto;
   padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.today-matches-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.today-matches-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.today-matches-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+}
+
+.today-matches-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .today-match-card {
@@ -164,6 +180,7 @@
   gap: 4px;
   text-align: left;
   background-color: var(--card-bg);
+  background-color: rgba(10, 18, 35, 0.46);
   border: 1px solid var(--glass-border);
   border-radius: 10px;
   color: white;
@@ -173,7 +190,7 @@
 }
 
 .today-match-card:hover {
-  background-color: var(--card-hover-bg);
+  background-color: rgba(18, 29, 51, 0.58);
   border-color: var(--card-hover-border);
 }
 
@@ -196,6 +213,7 @@
   font-size: 0.68rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.86);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
   justify-self: center;
   text-align: center;
   display: inline-flex;
@@ -253,8 +271,8 @@
 }
 
 .today-match-flag {
-  width: 18px;
-  height: 12px;
+  width: 22px;
+  height: 14px;
   object-fit: cover;
   border-radius: 3px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
@@ -265,6 +283,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
 }
 
 .today-match-team.team-state-leading {

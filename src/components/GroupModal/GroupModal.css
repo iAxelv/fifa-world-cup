@@ -153,6 +153,25 @@
   border-radius: 15px;
   padding: 15px 20px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.group-data-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.group-data-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.group-data-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+}
+
+.group-data-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .standings-table {

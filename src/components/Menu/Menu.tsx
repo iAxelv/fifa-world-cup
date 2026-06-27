@@ -20,15 +20,16 @@ type MatchWithGroup = Match & {
 
 const formatLocalDateTime = (dateString: string) => {
   const date = new Date(dateString)
-  const formattedDate = date.toLocaleDateString([], {
+  const formattedDate = date.toLocaleDateString('es-ES', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'
   })
-  const formattedTime = date.toLocaleTimeString([], {
+  const formattedTime = date.toLocaleTimeString('es-ES', {
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false
+    hour12: false,
+    hourCycle: 'h23'
   })
 
   return `${formattedDate} ${formattedTime}`
@@ -188,14 +189,14 @@ const Menu = ({ isAdmin, onLogout }: MenuProps) => {
                     </div>
                     <div className="today-match-teams">
                       <span className={`today-match-team ${getTeamStateClass(match, 'home')}`}>
-                        <img src={`https://flagcdn.com/${match.home.id}.svg`} alt={match.home.name} className="today-match-flag" />
+                        <img src={`https://flagcdn.com/${match.home.id}.svg`} alt={match.home.name} className="today-match-flag" width={22} height={14} />
                         <span className="today-match-team-name">{match.home.name}</span>
                       </span>
                       <span className="today-match-score">
                         {match.homeGoals ?? '-'} - {match.awayGoals ?? '-'}
                       </span>
                       <span className={`today-match-team today-match-team-right ${getTeamStateClass(match, 'away')}`}>
-                        <img src={`https://flagcdn.com/${match.away.id}.svg`} alt={match.away.name} className="today-match-flag" />
+                        <img src={`https://flagcdn.com/${match.away.id}.svg`} alt={match.away.name} className="today-match-flag" width={22} height={14} />
                         <span className="today-match-team-name">{match.away.name}</span>
                       </span>
                     </div>
