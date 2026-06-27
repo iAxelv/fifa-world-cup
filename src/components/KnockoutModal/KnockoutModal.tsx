@@ -1,5 +1,5 @@
 import { useCallback, useState, useRef, useEffect, useMemo } from 'react'
-import type { WheelEvent, MouseEvent } from 'react'
+import type { WheelEvent, MouseEvent, TouchEvent } from 'react'
 import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '../../firebase.ts'
 import { groupsData as initialGroups, matchesData as initialMatches, type Team, type Match } from '../../data/groups.ts'
@@ -13,6 +13,9 @@ interface KnockoutModalProps {
 
 const MIN_SCALE = 0.7
 const MAX_SCALE = 2.8
+const MOBILE_BREAKPOINT = 760
+const MOBILE_MIN_SCALE = 0.28
+const MOBILE_MAX_SCALE = 2.3
 const LOCAL_PREDICTIONS_KEY = 'worldcup_local_predictions'
 const LOCAL_KNOCKOUT_PREDICTIONS_KEY = 'worldcup_local_knockout_predictions'
 
@@ -305,6 +308,7 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
   const [scale, setScale] = useState(1)
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches)
   const [officialResults, setOfficialResults] = useState<Record<string, any>>({})
   const [localPredictions, setLocalPredictions] = useState<Record<string, any>>({})
   const [localKnockoutPredictions, setLocalKnockoutPredictions] = useState<KnockoutPredictions>(() => readLocalKnockoutPredictions())
@@ -314,6 +318,15 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
   const boardRef = useRef<HTMLDivElement>(null)
   const dragStart = useRef({ x: 0, y: 0 })
   const dragMovedRef = useRef(false)
+  const pinchStartDistanceRef = useRef<number | null>(null)
+  const pinchStartScaleRef = useRef(1)
+
+  const getScaleBounds = useCallback((mobile: boolean) => {
+    if (mobile) {
+      return { min: MOBILE_MIN_SCALE, max: MOBILE_MAX_SCALE }
+    }
+    return { min: MIN_SCALE, max: MAX_SCALE }
+  }, [])
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'worldcup'), (snapshot) => {
@@ -331,6 +344,17 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
       const raw = localStorage.getItem(LOCAL_PREDICTIONS_KEY)
       if (raw) setLocalPredictions(JSON.parse(raw))
     } catch {}
+  }, [])
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`)
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsMobile(event.matches)
+    }
+
+    setIsMobile(mediaQuery.matches)
+    mediaQuery.addEventListener('change', handleChange)
+    return () => mediaQuery.removeEventListener('change', handleChange)
   }, [])
 
   useEffect(() => {
@@ -711,16 +735,71 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
     }
   }, [])
 
+  const fitBoardForMobile = useCallback(() => {
+    const viewport = viewportRef.current
+    const board = boardRef.current
+    if (!viewport || !board) {
+      return
+    }
+
+    const boardWidth = board.offsetWidth
+    const boardHeight = board.offsetHeight
+    if (boardWidth <= 0 || boardHeight <= 0) {
+      return
+    }
+
+    const fitScaleRaw = Math.min(viewport.clientWidth / boardWidth, viewport.clientHeight / boardHeight)
+    const { min, max } = getScaleBounds(true)
+    const fitScale = Math.min(Math.max(fitScaleRaw * 0.98, min), max)
+    setScale(fitScale)
+    setPosition({ x: 0, y: 0 })
+  }, [getScaleBounds])
+
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) {
+      return
+    }
+
+    const updateLayout = () => {
+      if (isMobile) {
+        fitBoardForMobile()
+        return
+      }
+
+      const { min, max } = getScaleBounds(false)
+      setScale((currentScale) => {
+        const bounded = Math.min(Math.max(currentScale, min), max)
+        setPosition((currentPosition) => clampPosition(currentPosition, bounded))
+        return bounded
+      })
+    }
+
+    const frame = window.requestAnimationFrame(updateLayout)
+    window.addEventListener('resize', updateLayout)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('resize', updateLayout)
+    }
+  }, [isMobile, fitBoardForMobile, getScaleBounds, clampPosition])
+
   const handleWheel = (e: WheelEvent) => {
+    if (isMobile) {
+      return
+    }
     e.preventDefault()
     const zoomFactor = 0.08
     const newScale = e.deltaY < 0 ? scale + zoomFactor : scale - zoomFactor
-    const boundedScale = Math.min(Math.max(newScale, MIN_SCALE), MAX_SCALE)
+    const { min, max } = getScaleBounds(false)
+    const boundedScale = Math.min(Math.max(newScale, min), max)
     setScale(boundedScale)
     setPosition((current) => clampPosition(current, boundedScale))
   }
 
   const handleMouseDown = (e: MouseEvent) => {
+    if (isMobile) {
+      return
+    }
     if (e.button !== 0) {
       return
     }
@@ -734,6 +813,9 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
   }
 
   const handleMouseMove = (e: MouseEvent) => {
+    if (isMobile) {
+      return
+    }
     if (isDragging) {
       e.preventDefault()
       if (Math.abs(e.clientX - (dragStart.current.x + position.x)) > 3 || Math.abs(e.clientY - (dragStart.current.y + position.y)) > 3) {
@@ -747,15 +829,108 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
   }
 
   const handleMouseUp = () => {
+    if (isMobile) {
+      return
+    }
     setIsDragging(false)
     window.getSelection()?.removeAllRanges()
+  }
+
+  const getTouchDistance = (touchA: { clientX: number; clientY: number }, touchB: { clientX: number; clientY: number }) => {
+    return Math.hypot(touchA.clientX - touchB.clientX, touchA.clientY - touchB.clientY)
+  }
+
+  const handleTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (!isMobile) {
+      return
+    }
+
+    if (event.touches.length === 1) {
+      const touch = event.touches[0]
+      dragMovedRef.current = false
+      pinchStartDistanceRef.current = null
+      pinchStartScaleRef.current = scale
+      setIsDragging(true)
+      dragStart.current = {
+        x: touch.clientX - position.x,
+        y: touch.clientY - position.y
+      }
+      return
+    }
+
+    if (event.touches.length === 2) {
+      const first = event.touches[0]
+      const second = event.touches[1]
+      dragMovedRef.current = true
+      setIsDragging(false)
+      pinchStartDistanceRef.current = getTouchDistance(first, second)
+      pinchStartScaleRef.current = scale
+    }
+  }
+
+  const handleTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (!isMobile) {
+      return
+    }
+
+    if (event.touches.length === 2) {
+      event.preventDefault()
+      const first = event.touches[0]
+      const second = event.touches[1]
+      const currentDistance = getTouchDistance(first, second)
+      const startDistance = pinchStartDistanceRef.current
+      if (!startDistance || startDistance <= 0) {
+        return
+      }
+      const rawScale = pinchStartScaleRef.current * (currentDistance / startDistance)
+      const { min, max } = getScaleBounds(true)
+      const boundedScale = Math.min(Math.max(rawScale, min), max)
+      setScale(boundedScale)
+      setPosition((current) => clampPosition(current, boundedScale))
+      return
+    }
+
+    if (event.touches.length === 1 && isDragging) {
+      event.preventDefault()
+      const touch = event.touches[0]
+      const nextPosition = {
+        x: touch.clientX - dragStart.current.x,
+        y: touch.clientY - dragStart.current.y
+      }
+      if (Math.abs(nextPosition.x - position.x) > 3 || Math.abs(nextPosition.y - position.y) > 3) {
+        dragMovedRef.current = true
+      }
+      setPosition(clampPosition(nextPosition, scale))
+    }
+  }
+
+  const handleTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    if (!isMobile) {
+      return
+    }
+
+    if (event.touches.length === 0) {
+      setIsDragging(false)
+      pinchStartDistanceRef.current = null
+      return
+    }
+
+    if (event.touches.length === 1) {
+      const touch = event.touches[0]
+      setIsDragging(true)
+      dragStart.current = {
+        x: touch.clientX - position.x,
+        y: touch.clientY - position.y
+      }
+      pinchStartDistanceRef.current = null
+    }
   }
 
   const editorValidation = editingMatch ? buildResultFromDraft(editingDraft) : null
 
   return (
     <div className="knockout-overlay" onClick={onClose}>
-      <div className="knockout-content" onClick={(e) => e.stopPropagation()}>
+      <div className={`knockout-content ${isMobile ? 'is-mobile' : 'is-desktop'}`} onClick={(e) => e.stopPropagation()}>
         <button className="knockout-close-button" onClick={onClose}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
@@ -772,6 +947,9 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         >
           <div
             className="knockout-board"
