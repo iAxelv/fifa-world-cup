@@ -220,6 +220,7 @@ const Menu = ({ isAdmin, onLogout }: MenuProps) => {
       {isKnockoutModalOpen && (
         <KnockoutModal
           onClose={() => setIsKnockoutModalOpen(false)}
+          isAdmin={isAdmin}
         />
       )}
     </>

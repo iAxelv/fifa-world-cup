@@ -365,6 +365,10 @@ const GroupModal = ({ onClose, isAdmin, onLogout, initialGroup }: GroupModalProp
     return sortTeams(thirds)
   }
 
+  const qualifiedThirdIds = useMemo(() => {
+    return new Set(getThirdPlaceTeams().slice(0, 8).map((team) => team.id))
+  }, [liveGroupsData, liveMatchesData])
+
   const currentGroupTeams: Array<Team & { originalGroup?: string }> = activeGroup === '3ROS' 
     ? getThirdPlaceTeams() 
     : sortTeams(liveGroupsData[activeGroup] || [], liveMatchesData[activeGroup])
@@ -387,7 +391,7 @@ const GroupModal = ({ onClose, isAdmin, onLogout, initialGroup }: GroupModalProp
     return `${formattedDate} ${formattedTime}`
   }
 
-  const getStatusClass = (position: number) => {
+  const getStatusClass = (position: number, team: Team & { originalGroup?: string }) => {
     if (activeGroup === '3ROS') {
       if (position <= 8) return 'status-direct'
       return 'status-eliminated'
@@ -397,7 +401,7 @@ const GroupModal = ({ onClose, isAdmin, onLogout, initialGroup }: GroupModalProp
       return 'status-direct'
     }
     if (position === 3) {
-      return 'status-third-qualified'
+      return qualifiedThirdIds.has(team.id) ? 'status-third-qualified' : 'status-eliminated'
     }
     return 'status-eliminated'
   }
@@ -486,7 +490,7 @@ const GroupModal = ({ onClose, isAdmin, onLogout, initialGroup }: GroupModalProp
               {currentGroupTeams.map((team, index) => {
                 const position = index + 1
                 return (
-                  <tr key={team.id} className={getStatusClass(position)}>
+                  <tr key={team.id} className={getStatusClass(position, team)}>
                     <td className="pos-col">{position}</td>
                     <td className="team-col">
                       <img src={`https://flagcdn.com/${team.id}.svg`} alt={team.name} className="team-flag" />

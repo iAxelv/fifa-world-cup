@@ -11,6 +11,8 @@ export interface KnockoutMatch {
   away: KnockoutTeam
   homeGoals: number | null
   awayGoals: number | null
+  homePenalties?: number | null
+  awayPenalties?: number | null
 }
 
 export interface KnockoutData {
@@ -32,7 +34,9 @@ const createMatch = (id: string, date: string, homeName: string, awayName: strin
   home: { id: 'tbd', name: homeName, isPlaceholder: true },
   away: { id: 'tbd', name: awayName, isPlaceholder: true },
   homeGoals: null,
-  awayGoals: null
+  awayGoals: null,
+  homePenalties: null,
+  awayPenalties: null
 })
 
 export const knockoutData: KnockoutData = {
@@ -47,30 +51,30 @@ export const knockoutData: KnockoutData = {
     createMatch('L32-8', '2026-07-01T20:00:00Z', '1G', '3-AEHIJ')
   ],
   leftRoundOf16: [
-    createMatch('L16-1', '2026-07-04T21:00:00Z', 'Ganador L32-1', 'Ganador L32-2'),
-    createMatch('L16-2', '2026-07-04T17:00:00Z', 'Ganador L32-3', 'Ganador L32-4'),
-    createMatch('L16-3', '2026-07-06T19:00:00Z', 'Ganador L32-5', 'Ganador L32-6'),
-    createMatch('L16-4', '2026-07-07T00:00:00Z', 'Ganador L32-7', 'Ganador L32-8')
+    createMatch('L16-1', '2026-07-04T21:00:00Z', 'W L32-1', 'W L32-2'),
+    createMatch('L16-2', '2026-07-04T17:00:00Z', 'W L32-3', 'W L32-4'),
+    createMatch('L16-3', '2026-07-06T19:00:00Z', 'W L32-5', 'W L32-6'),
+    createMatch('L16-4', '2026-07-07T00:00:00Z', 'W L32-7', 'W L32-8')
   ],
   leftQuarterfinals: [
-    createMatch('LQF-1', '2026-07-09T20:00:00Z', 'Ganador L16-1', 'Ganador L16-2'),
-    createMatch('LQF-2', '2026-07-10T19:00:00Z', 'Ganador L16-3', 'Ganador L16-4')
+    createMatch('LQF-1', '2026-07-09T20:00:00Z', 'W L16-1', 'W L16-2'),
+    createMatch('LQF-2', '2026-07-10T19:00:00Z', 'W L16-3', 'W L16-4')
   ],
   leftSemifinals: [
-    createMatch('LSF-1', '2026-07-14T19:00:00Z', 'Ganador LQF-1', 'Ganador LQF-2')
+    createMatch('LSF-1', '2026-07-14T19:00:00Z', 'W LQF-1', 'W LQF-2')
   ],
   rightSemifinals: [
-    createMatch('RSF-1', '2026-07-15T19:00:00Z', 'Ganador RQF-1', 'Ganador RQF-2')
+    createMatch('RSF-1', '2026-07-15T19:00:00Z', 'W RQF-1', 'W RQF-2')
   ],
   rightQuarterfinals: [
-    createMatch('RQF-1', '2026-07-11T21:00:00Z', 'Ganador R16-1', 'Ganador R16-2'),
-    createMatch('RQF-2', '2026-07-12T01:00:00Z', 'Ganador R16-3', 'Ganador R16-4')
+    createMatch('RQF-1', '2026-07-11T21:00:00Z', 'W R16-1', 'W R16-2'),
+    createMatch('RQF-2', '2026-07-12T01:00:00Z', 'W R16-3', 'W R16-4')
   ],
   rightRoundOf16: [
-    createMatch('R16-1', '2026-07-05T20:00:00Z', 'Ganador R32-1', 'Ganador R32-2'),
-    createMatch('R16-2', '2026-07-06T00:00:00Z', 'Ganador R32-3', 'Ganador R32-4'),
-    createMatch('R16-3', '2026-07-07T16:00:00Z', 'Ganador R32-5', 'Ganador R32-6'),
-    createMatch('R16-4', '2026-07-07T20:00:00Z', 'Ganador R32-7', 'Ganador R32-8')
+    createMatch('R16-1', '2026-07-05T20:00:00Z', 'W R32-1', 'W R32-2'),
+    createMatch('R16-2', '2026-07-06T00:00:00Z', 'W R32-3', 'W R32-4'),
+    createMatch('R16-3', '2026-07-07T16:00:00Z', 'W R32-5', 'W R32-6'),
+    createMatch('R16-4', '2026-07-07T20:00:00Z', 'W R32-7', 'W R32-8')
   ],
   rightRoundOf32: [
     createMatch('R32-1', '2026-06-29T17:00:00Z', '1C', '2F'),
@@ -82,6 +86,6 @@ export const knockoutData: KnockoutData = {
     createMatch('R32-7', '2026-07-03T03:00:00Z', '1B', '3-EFGIJ'),
     createMatch('R32-8', '2026-07-04T01:30:00Z', '1K', '3-DEIJL')
   ],
-  final: createMatch('FINAL', '2026-07-19T19:00:00Z', 'Ganador LSF-1', 'Ganador RSF-1'),
-  thirdPlace: createMatch('THIRD', '2026-07-18T21:00:00Z', 'Perdedor LSF-1', 'Perdedor RSF-1')
+  final: createMatch('FINAL', '2026-07-19T19:00:00Z', 'W LSF-1', 'W RSF-1'),
+  thirdPlace: createMatch('THIRD', '2026-07-18T21:00:00Z', 'L LSF-1', 'L RSF-1')
 }

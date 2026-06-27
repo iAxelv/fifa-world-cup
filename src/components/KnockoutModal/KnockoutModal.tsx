@@ -1,6 +1,6 @@
 import { useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import type { WheelEvent, MouseEvent } from 'react'
-import { collection, onSnapshot } from 'firebase/firestore'
+import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '../../firebase.ts'
 import { groupsData as initialGroups, matchesData as initialMatches, type Team, type Match } from '../../data/groups.ts'
 import { knockoutData, type KnockoutMatch, type KnockoutTeam } from '../../data/knockout.ts'
@@ -8,11 +8,41 @@ import './KnockoutModal.css'
 
 interface KnockoutModalProps {
   onClose: () => void
+  isAdmin: boolean
 }
 
 const MIN_SCALE = 0.7
 const MAX_SCALE = 2.8
 const LOCAL_PREDICTIONS_KEY = 'worldcup_local_predictions'
+const LOCAL_KNOCKOUT_PREDICTIONS_KEY = 'worldcup_local_knockout_predictions'
+
+type MatchResult = {
+  homeGoals: number
+  awayGoals: number
+  homePenalties?: number | null
+  awayPenalties?: number | null
+}
+
+type KnockoutPrediction = {
+  homeGoals: number
+  awayGoals: number
+  homePenalties: number | null
+  awayPenalties: number | null
+}
+
+type KnockoutPredictions = Record<string, KnockoutPrediction>
+
+type EditingDraft = {
+  homeGoals: string
+  awayGoals: string
+  homePenalties: string
+  awayPenalties: string
+}
+
+type DraftValidation = {
+  result: MatchResult | null
+  error: string | null
+}
 
 const cloneTeamWithZeroStats = (team: Team): Team => ({
   ...team,
@@ -121,17 +151,124 @@ const assignThirds = (bestThirds: Array<Team & { group: string }>) => {
 interface MatchBoxProps {
   match: KnockoutMatch
   lineClassName?: string
+  side?: 'left' | 'right' | 'center'
+  onClick?: (match: KnockoutMatch) => void
 }
 
-const MatchBox = ({ match, lineClassName = '' }: MatchBoxProps) => (
-  <div className={`knockout-match ${lineClassName}`}>
+const normalizePlaceholder = (value: string) => {
+  if (value.startsWith('Ganador ')) {
+    return `W ${value.replace('Ganador ', '')}`
+  }
+  if (value.startsWith('Perdedor ')) {
+    return `L ${value.replace('Perdedor ', '')}`
+  }
+  return value
+}
+
+const parseReference = (value: string): { type: 'W' | 'L'; prevId: string } | null => {
+  if (value.startsWith('W ')) {
+    return { type: 'W', prevId: value.replace('W ', '') }
+  }
+  if (value.startsWith('L ')) {
+    return { type: 'L', prevId: value.replace('L ', '') }
+  }
+  if (value.startsWith('Ganador ')) {
+    return { type: 'W', prevId: value.replace('Ganador ', '') }
+  }
+  if (value.startsWith('Perdedor ')) {
+    return { type: 'L', prevId: value.replace('Perdedor ', '') }
+  }
+  return null
+}
+
+const parseOptionalGoal = (value: string): number | null => {
+  if (value.trim() === '') return null
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) return null
+  return Math.floor(parsed)
+}
+
+const readLocalKnockoutPredictions = (): KnockoutPredictions => {
+  try {
+    const raw = localStorage.getItem(LOCAL_KNOCKOUT_PREDICTIONS_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, {
+      homeGoals?: unknown
+      awayGoals?: unknown
+      homePenalties?: unknown
+      awayPenalties?: unknown
+    }>
+    return Object.entries(parsed).reduce((acc, [matchId, values]) => {
+      if (
+        typeof values.homeGoals === 'number' &&
+        Number.isFinite(values.homeGoals) &&
+        values.homeGoals >= 0 &&
+        typeof values.awayGoals === 'number' &&
+        Number.isFinite(values.awayGoals) &&
+        values.awayGoals >= 0
+      ) {
+        acc[matchId] = {
+          homeGoals: Math.floor(values.homeGoals),
+          awayGoals: Math.floor(values.awayGoals),
+          homePenalties:
+            typeof values.homePenalties === 'number' && Number.isFinite(values.homePenalties) && values.homePenalties >= 0
+              ? Math.floor(values.homePenalties)
+              : null,
+          awayPenalties:
+            typeof values.awayPenalties === 'number' && Number.isFinite(values.awayPenalties) && values.awayPenalties >= 0
+              ? Math.floor(values.awayPenalties)
+              : null
+        }
+      }
+      return acc
+    }, {} as KnockoutPredictions)
+  } catch {
+    return {}
+  }
+}
+
+const persistLocalKnockoutPredictions = (predictions: KnockoutPredictions) => {
+  localStorage.setItem(LOCAL_KNOCKOUT_PREDICTIONS_KEY, JSON.stringify(predictions))
+}
+
+const resolveWinnerAndLoser = (
+  home: KnockoutTeam,
+  away: KnockoutTeam,
+  result: MatchResult
+): { winner: Team; loser: Team } | null => {
+  if (home.id === 'tbd' || away.id === 'tbd' || home.isPlaceholder || away.isPlaceholder) {
+    return null
+  }
+  const homeTeam = { id: home.id, name: home.name } as Team
+  const awayTeam = { id: away.id, name: away.name } as Team
+
+  if (result.homeGoals > result.awayGoals) {
+    return { winner: homeTeam, loser: awayTeam }
+  }
+  if (result.awayGoals > result.homeGoals) {
+    return { winner: awayTeam, loser: homeTeam }
+  }
+
+  const homePens = result.homePenalties
+  const awayPens = result.awayPenalties
+  if (homePens === null || homePens === undefined || awayPens === null || awayPens === undefined || homePens === awayPens) {
+    return null
+  }
+
+  return homePens > awayPens
+    ? { winner: homeTeam, loser: awayTeam }
+    : { winner: awayTeam, loser: homeTeam }
+}
+
+const MatchBox = ({ match, lineClassName = '', side = 'left', onClick }: MatchBoxProps) => (
+  <button type="button" className={`knockout-match ${lineClassName} side-${side}`} onClick={() => onClick?.(match)}>
     <div className="knockout-match-datetime">{formatDateTime(match.date)}</div>
     <div className="knockout-team">
       <div className="knockout-team-info">
         {match.home.id !== 'tbd' && !match.home.isPlaceholder && (
           <img src={`https://flagcdn.com/${match.home.id}.svg`} alt={match.home.name} className="knockout-flag" />
         )}
-        <span className="knockout-team-name">{match.home.name}</span>
+        <span className="knockout-team-name">{normalizePlaceholder(match.home.name)}</span>
       </div>
       <span className="knockout-team-score">{match.homeGoals ?? '-'}</span>
     </div>
@@ -140,11 +277,16 @@ const MatchBox = ({ match, lineClassName = '' }: MatchBoxProps) => (
         {match.away.id !== 'tbd' && !match.away.isPlaceholder && (
           <img src={`https://flagcdn.com/${match.away.id}.svg`} alt={match.away.name} className="knockout-flag" />
         )}
-        <span className="knockout-team-name">{match.away.name}</span>
+        <span className="knockout-team-name">{normalizePlaceholder(match.away.name)}</span>
       </div>
       <span className="knockout-team-score">{match.awayGoals ?? '-'}</span>
     </div>
-  </div>
+    {(match.homeGoals !== null && match.awayGoals !== null) && (
+      <div className="knockout-penalties-pill">
+        Pen: {match.homePenalties ?? '-'} - {match.awayPenalties ?? '-'}
+      </div>
+    )}
+  </button>
 )
 
 const Spines = ({ count, side }: { count: number; side: 'left' | 'right' }) => {
@@ -165,16 +307,20 @@ const Spines = ({ count, side }: { count: number; side: 'left' | 'right' }) => {
   return <>{spines}</>
 }
 
-const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
+const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
   const [scale, setScale] = useState(1)
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [officialResults, setOfficialResults] = useState<Record<string, any>>({})
   const [localPredictions, setLocalPredictions] = useState<Record<string, any>>({})
+  const [localKnockoutPredictions, setLocalKnockoutPredictions] = useState<KnockoutPredictions>(() => readLocalKnockoutPredictions())
+  const [editingMatch, setEditingMatch] = useState<KnockoutMatch | null>(null)
+  const [editingDraft, setEditingDraft] = useState<EditingDraft>({ homeGoals: '', awayGoals: '', homePenalties: '', awayPenalties: '' })
   
   const viewportRef = useRef<HTMLDivElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
   const dragStart = useRef({ x: 0, y: 0 })
+  const dragMovedRef = useRef(false)
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'worldcup'), (snapshot) => {
@@ -193,6 +339,22 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
       if (raw) setLocalPredictions(JSON.parse(raw))
     } catch {}
   }, [])
+
+  useEffect(() => {
+    const cleaned = { ...localKnockoutPredictions }
+    let changed = false
+    Object.entries(officialResults).forEach(([matchId, official]) => {
+      if ((official as { homeGoals?: number | null }).homeGoals !== null && cleaned[matchId]) {
+        delete cleaned[matchId]
+        changed = true
+      }
+    })
+
+    if (changed) {
+      setLocalKnockoutPredictions(cleaned)
+      persistLocalKnockoutPredictions(cleaned)
+    }
+  }, [officialResults, localKnockoutPredictions])
 
   const liveMatchesData = useMemo(() => {
     return Object.keys(initialMatches).reduce((acc, groupKey) => {
@@ -293,46 +455,49 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
         let home: KnockoutTeam
         let away: KnockoutTeam
 
-        if (match.home.name.startsWith('Ganador ')) {
-          const prevId = match.home.name.replace('Ganador ', '')
-          const winner = knockoutResults[prevId]
-          home = winner ? { id: winner.id, name: winner.name } : { id: 'tbd', name: match.home.name, isPlaceholder: true }
-        } else if (match.home.name.startsWith('Perdedor ')) {
-          const prevId = match.home.name.replace('Perdedor ', '')
-          const loser = knockoutLosers[prevId]
-          home = loser ? { id: loser.id, name: loser.name } : { id: 'tbd', name: match.home.name, isPlaceholder: true }
+        const homeReference = parseReference(match.home.name)
+        if (homeReference?.type === 'W') {
+          const winner = knockoutResults[homeReference.prevId]
+          home = winner ? { id: winner.id, name: winner.name } : { id: 'tbd', name: normalizePlaceholder(match.home.name), isPlaceholder: true }
+        } else if (homeReference?.type === 'L') {
+          const loser = knockoutLosers[homeReference.prevId]
+          home = loser ? { id: loser.id, name: loser.name } : { id: 'tbd', name: normalizePlaceholder(match.home.name), isPlaceholder: true }
         } else {
           home = resolveTeam(match.home.name)
         }
 
-        if (match.away.name.startsWith('Ganador ')) {
-          const prevId = match.away.name.replace('Ganador ', '')
-          const winner = knockoutResults[prevId]
-          away = winner ? { id: winner.id, name: winner.name } : { id: 'tbd', name: match.away.name, isPlaceholder: true }
-        } else if (match.away.name.startsWith('Perdedor ')) {
-          const prevId = match.away.name.replace('Perdedor ', '')
-          const loser = knockoutLosers[prevId]
-          away = loser ? { id: loser.id, name: loser.name } : { id: 'tbd', name: match.away.name, isPlaceholder: true }
+        const awayReference = parseReference(match.away.name)
+        if (awayReference?.type === 'W') {
+          const winner = knockoutResults[awayReference.prevId]
+          away = winner ? { id: winner.id, name: winner.name } : { id: 'tbd', name: normalizePlaceholder(match.away.name), isPlaceholder: true }
+        } else if (awayReference?.type === 'L') {
+          const loser = knockoutLosers[awayReference.prevId]
+          away = loser ? { id: loser.id, name: loser.name } : { id: 'tbd', name: normalizePlaceholder(match.away.name), isPlaceholder: true }
         } else {
           away = resolveTeam(match.away.name)
         }
 
         const official = officialResults[match.id]
-        const local = localPredictions[match.id]
+        const local = localKnockoutPredictions[match.id]
         const homeGoals = (official?.homeGoals !== undefined && official?.homeGoals !== null) ? official.homeGoals : (local?.homeGoals ?? null)
         const awayGoals = (official?.awayGoals !== undefined && official?.awayGoals !== null) ? official.awayGoals : (local?.awayGoals ?? null)
+        const homePenalties = (official?.homePenalties !== undefined && official?.homePenalties !== null) ? official.homePenalties : (local?.homePenalties ?? null)
+        const awayPenalties = (official?.awayPenalties !== undefined && official?.awayPenalties !== null) ? official.awayPenalties : (local?.awayPenalties ?? null)
 
-        if (homeGoals !== null && awayGoals !== null && home.id !== 'tbd' && away.id !== 'tbd' && !home.isPlaceholder && !away.isPlaceholder) {
-          if (homeGoals > awayGoals) {
-            knockoutResults[match.id] = home as Team
-            knockoutLosers[match.id] = away as Team
-          } else if (awayGoals > homeGoals) {
-            knockoutResults[match.id] = away as Team
-            knockoutLosers[match.id] = home as Team
+        if (homeGoals !== null && awayGoals !== null) {
+          const resolved = resolveWinnerAndLoser(home, away, {
+            homeGoals,
+            awayGoals,
+            homePenalties,
+            awayPenalties
+          })
+          if (resolved) {
+            knockoutResults[match.id] = resolved.winner
+            knockoutLosers[match.id] = resolved.loser
           }
         }
 
-        return { ...match, home, away, homeGoals, awayGoals }
+        return { ...match, home, away, homeGoals, awayGoals, homePenalties, awayPenalties }
       })
     }
 
@@ -354,7 +519,197 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
       leftSemifinals, rightSemifinals,
       final, thirdPlace
     }
-  }, [standings, officialResults, localPredictions])
+  }, [standings, officialResults, localKnockoutPredictions])
+
+  const getMatchResultSource = useCallback((matchId: string) => {
+    const official = officialResults[matchId]
+    if (official?.homeGoals !== undefined && official?.homeGoals !== null && official?.awayGoals !== undefined && official?.awayGoals !== null) {
+      return {
+        source: 'official' as const,
+        result: {
+          homeGoals: official.homeGoals,
+          awayGoals: official.awayGoals,
+          homePenalties: official.homePenalties ?? null,
+          awayPenalties: official.awayPenalties ?? null
+        }
+      }
+    }
+
+    const local = localKnockoutPredictions[matchId]
+    if (local) {
+      return {
+        source: 'local' as const,
+        result: {
+          homeGoals: local.homeGoals,
+          awayGoals: local.awayGoals,
+          homePenalties: local.homePenalties ?? null,
+          awayPenalties: local.awayPenalties ?? null
+        }
+      }
+    }
+
+    return { source: 'none' as const, result: null }
+  }, [officialResults, localKnockoutPredictions])
+
+  const updateLocalKnockoutPrediction = useCallback((matchId: string, result: MatchResult | null) => {
+    setLocalKnockoutPredictions((prev) => {
+      const next = { ...prev }
+      if (!result) {
+        delete next[matchId]
+      } else {
+        next[matchId] = {
+          homeGoals: result.homeGoals,
+          awayGoals: result.awayGoals,
+          homePenalties: result.homePenalties ?? null,
+          awayPenalties: result.awayPenalties ?? null
+        }
+      }
+      persistLocalKnockoutPredictions(next)
+      return next
+    })
+  }, [])
+
+  const updateOfficialKnockoutResult = useCallback(async (match: KnockoutMatch, result: MatchResult | null) => {
+    if (!result) {
+      await setDoc(
+        doc(db, 'worldcup', match.id),
+        {
+          date: match.date,
+          homeGoals: null,
+          awayGoals: null,
+          homePenalties: null,
+          awayPenalties: null,
+          winner: null
+        },
+        { merge: true }
+      )
+      return
+    }
+
+    const resolved = resolveWinnerAndLoser(match.home, match.away, result)
+    const winner = resolved ? resolved.winner.id : null
+
+    await setDoc(
+      doc(db, 'worldcup', match.id),
+      {
+        date: match.date,
+        homeGoals: result.homeGoals,
+        awayGoals: result.awayGoals,
+        homePenalties: result.homePenalties ?? null,
+        awayPenalties: result.awayPenalties ?? null,
+        winner
+      },
+      { merge: true }
+    )
+  }, [])
+
+  const buildResultFromDraft = useCallback((draft: EditingDraft): DraftValidation => {
+    const homeGoals = parseOptionalGoal(draft.homeGoals)
+    const awayGoals = parseOptionalGoal(draft.awayGoals)
+
+    if (homeGoals === null && awayGoals === null) {
+      return { result: null, error: null }
+    }
+
+    if (homeGoals === null || awayGoals === null) {
+      return { result: null, error: 'Completa ambos marcadores o deja ambos vacios.' }
+    }
+
+    const homePenalties = parseOptionalGoal(draft.homePenalties)
+    const awayPenalties = parseOptionalGoal(draft.awayPenalties)
+
+    if (homeGoals !== awayGoals) {
+      return {
+        result: {
+          homeGoals,
+          awayGoals,
+          homePenalties: null,
+          awayPenalties: null
+        },
+        error: null
+      }
+    }
+
+    if ((homePenalties === null) !== (awayPenalties === null)) {
+      return { result: null, error: 'Si empatan, debes completar ambos penales.' }
+    }
+
+    if (homePenalties === null && awayPenalties === null) {
+      return {
+        result: {
+          homeGoals,
+          awayGoals,
+          homePenalties: null,
+          awayPenalties: null
+        },
+        error: null
+      }
+    }
+
+    if (homePenalties === awayPenalties) {
+      return { result: null, error: 'Los penales no pueden terminar empatados.' }
+    }
+
+    return {
+      result: {
+        homeGoals,
+        awayGoals,
+        homePenalties,
+        awayPenalties
+      },
+      error: null
+    }
+  }, [])
+
+  const canEditMatch = useCallback((match: KnockoutMatch) => {
+    const hasTeamsReady =
+      match.home.id !== 'tbd' &&
+      match.away.id !== 'tbd' &&
+      !match.home.isPlaceholder &&
+      !match.away.isPlaceholder
+    if (!hasTeamsReady) return false
+    if (isAdmin) return true
+    return !(officialResults[match.id]?.homeGoals !== null && officialResults[match.id]?.homeGoals !== undefined)
+  }, [isAdmin, officialResults])
+
+  const openMatchEditor = useCallback((match: KnockoutMatch) => {
+    if (!canEditMatch(match) || isDragging) return
+    const { result } = getMatchResultSource(match.id)
+    setEditingMatch(match)
+    setEditingDraft({
+      homeGoals: result ? String(result.homeGoals) : '',
+      awayGoals: result ? String(result.awayGoals) : '',
+      homePenalties: result?.homePenalties === null || result?.homePenalties === undefined ? '' : String(result.homePenalties),
+      awayPenalties: result?.awayPenalties === null || result?.awayPenalties === undefined ? '' : String(result.awayPenalties)
+    })
+  }, [canEditMatch, getMatchResultSource, isDragging])
+
+  const closeEditor = () => {
+    setEditingMatch(null)
+  }
+
+  const handleEditorChange = (field: keyof EditingDraft, value: string) => {
+    if (value !== '' && !/^\d+$/.test(value)) {
+      return
+    }
+    setEditingDraft((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleSaveMatch = async () => {
+    if (!editingMatch) return
+    const validation = buildResultFromDraft(editingDraft)
+    if (validation.error) {
+      return
+    }
+
+    if (isAdmin) {
+      await updateOfficialKnockoutResult(editingMatch, validation.result)
+    } else {
+      updateLocalKnockoutPrediction(editingMatch.id, validation.result)
+    }
+
+    closeEditor()
+  }
 
   const clampPosition = useCallback((nextPosition: { x: number; y: number }, nextScale: number) => {
     const viewport = viewportRef.current
@@ -387,6 +742,7 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
     }
     e.preventDefault()
     setIsDragging(true)
+    dragMovedRef.current = false
     dragStart.current = {
       x: e.clientX - position.x,
       y: e.clientY - position.y
@@ -396,6 +752,9 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
   const handleMouseMove = (e: MouseEvent) => {
     if (isDragging) {
       e.preventDefault()
+      if (Math.abs(e.clientX - (dragStart.current.x + position.x)) > 3 || Math.abs(e.clientY - (dragStart.current.y + position.y)) > 3) {
+        dragMovedRef.current = true
+      }
       setPosition(clampPosition({
         x: e.clientX - dragStart.current.x,
         y: e.clientY - dragStart.current.y
@@ -407,6 +766,8 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
     setIsDragging(false)
     window.getSelection()?.removeAllRanges()
   }
+
+  const editorValidation = editingMatch ? buildResultFromDraft(editingDraft) : null
 
   return (
     <div className="knockout-overlay" onClick={onClose}>
@@ -441,7 +802,10 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
                 <div className="knockout-matches-col">
                   <Spines count={liveKnockout.leftRoundOf32.length} side="right" />
                   {liveKnockout.leftRoundOf32.map((match) => (
-                    <MatchBox key={match.id} match={match} lineClassName="line-out-right" />
+                    <MatchBox key={match.id} match={match} side="left" lineClassName="line-out-right" onClick={(matchData) => {
+                      if (dragMovedRef.current) return
+                      openMatchEditor(matchData)
+                    }} />
                   ))}
                 </div>
               </div>
@@ -450,7 +814,10 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
                 <div className="knockout-matches-col">
                   <Spines count={liveKnockout.leftRoundOf16.length} side="right" />
                   {liveKnockout.leftRoundOf16.map((match) => (
-                    <MatchBox key={match.id} match={match} lineClassName="line-in-left line-out-right" />
+                    <MatchBox key={match.id} match={match} side="left" lineClassName="line-in-left line-out-right" onClick={(matchData) => {
+                      if (dragMovedRef.current) return
+                      openMatchEditor(matchData)
+                    }} />
                   ))}
                 </div>
               </div>
@@ -459,7 +826,10 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
                 <div className="knockout-matches-col">
                   <Spines count={liveKnockout.leftQuarterfinals.length} side="right" />
                   {liveKnockout.leftQuarterfinals.map((match) => (
-                    <MatchBox key={match.id} match={match} lineClassName="line-in-left line-out-right" />
+                    <MatchBox key={match.id} match={match} side="left" lineClassName="line-in-left line-out-right" onClick={(matchData) => {
+                      if (dragMovedRef.current) return
+                      openMatchEditor(matchData)
+                    }} />
                   ))}
                 </div>
               </div>
@@ -467,7 +837,10 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
                 <h4 className="knockout-round-title">Semifinal</h4>
                 <div className="knockout-matches-col">
                   {liveKnockout.leftSemifinals.map((match) => (
-                    <MatchBox key={match.id} match={match} lineClassName="line-in-left line-out-right" />
+                    <MatchBox key={match.id} match={match} side="left" lineClassName="line-in-left line-out-right" onClick={(matchData) => {
+                      if (dragMovedRef.current) return
+                      openMatchEditor(matchData)
+                    }} />
                   ))}
                 </div>
               </div>
@@ -478,11 +851,17 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
                 <Spines count={2} side="right" />
                 <div className="knockout-final-group">
                   <h4 className="knockout-round-title knockout-gold knockout-center-title">Final</h4>
-                  <MatchBox match={liveKnockout.final} lineClassName="line-in-left line-in-right" />
+                  <MatchBox match={liveKnockout.final} side="center" lineClassName="line-in-left line-in-right" onClick={(matchData) => {
+                    if (dragMovedRef.current) return
+                    openMatchEditor(matchData)
+                  }} />
                 </div>
                 <div className="knockout-final-group">
                   <h4 className="knockout-round-title knockout-bronze knockout-center-title">Tercer Puesto</h4>
-                  <MatchBox match={liveKnockout.thirdPlace} lineClassName="line-in-left line-in-right" />
+                  <MatchBox match={liveKnockout.thirdPlace} side="center" lineClassName="line-in-left line-in-right" onClick={(matchData) => {
+                    if (dragMovedRef.current) return
+                    openMatchEditor(matchData)
+                  }} />
                 </div>
               </div>
             </div>
@@ -491,7 +870,10 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
                 <h4 className="knockout-round-title">Semifinal</h4>
                 <div className="knockout-matches-col">
                   {liveKnockout.rightSemifinals.map((match) => (
-                    <MatchBox key={match.id} match={match} lineClassName="line-in-right line-out-left" />
+                    <MatchBox key={match.id} match={match} side="right" lineClassName="line-in-right line-out-left" onClick={(matchData) => {
+                      if (dragMovedRef.current) return
+                      openMatchEditor(matchData)
+                    }} />
                   ))}
                 </div>
               </div>
@@ -500,7 +882,10 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
                 <div className="knockout-matches-col">
                   <Spines count={liveKnockout.rightQuarterfinals.length} side="left" />
                   {liveKnockout.rightQuarterfinals.map((match) => (
-                    <MatchBox key={match.id} match={match} lineClassName="line-in-right line-out-left" />
+                    <MatchBox key={match.id} match={match} side="right" lineClassName="line-in-right line-out-left" onClick={(matchData) => {
+                      if (dragMovedRef.current) return
+                      openMatchEditor(matchData)
+                    }} />
                   ))}
                 </div>
               </div>
@@ -509,7 +894,10 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
                 <div className="knockout-matches-col">
                   <Spines count={liveKnockout.rightRoundOf16.length} side="left" />
                   {liveKnockout.rightRoundOf16.map((match) => (
-                    <MatchBox key={match.id} match={match} lineClassName="line-in-right line-out-left" />
+                    <MatchBox key={match.id} match={match} side="right" lineClassName="line-in-right line-out-left" onClick={(matchData) => {
+                      if (dragMovedRef.current) return
+                      openMatchEditor(matchData)
+                    }} />
                   ))}
                 </div>
               </div>
@@ -518,13 +906,81 @@ const KnockoutModal = ({ onClose }: KnockoutModalProps) => {
                 <div className="knockout-matches-col">
                   <Spines count={liveKnockout.rightRoundOf32.length} side="left" />
                   {liveKnockout.rightRoundOf32.map((match) => (
-                    <MatchBox key={match.id} match={match} lineClassName="line-out-left" />
+                    <MatchBox key={match.id} match={match} side="right" lineClassName="line-out-left" onClick={(matchData) => {
+                      if (dragMovedRef.current) return
+                      openMatchEditor(matchData)
+                    }} />
                   ))}
                 </div>
               </div>
             </div>
           </div>
         </div>
+
+        {editingMatch && (
+          <div className="knockout-editor-overlay" onClick={closeEditor}>
+            <div className="knockout-editor-modal" onClick={(e) => e.stopPropagation()}>
+              <h3 className="knockout-editor-title">Editar Resultado</h3>
+              <MatchBox match={editingMatch} side="center" />
+
+              <div className="knockout-editor-grid">
+                <label>
+                  <span>{editingMatch.home.name}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={editingDraft.homeGoals}
+                    onChange={(e) => handleEditorChange('homeGoals', e.target.value)}
+                    placeholder="Goles"
+                  />
+                </label>
+                <label>
+                  <span>{editingMatch.away.name}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={editingDraft.awayGoals}
+                    onChange={(e) => handleEditorChange('awayGoals', e.target.value)}
+                    placeholder="Goles"
+                  />
+                </label>
+                <label>
+                  <span>Penales {editingMatch.home.name}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={editingDraft.homePenalties}
+                    onChange={(e) => handleEditorChange('homePenalties', e.target.value)}
+                    placeholder="Opcional"
+                  />
+                </label>
+                <label>
+                  <span>Penales {editingMatch.away.name}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={editingDraft.awayPenalties}
+                    onChange={(e) => handleEditorChange('awayPenalties', e.target.value)}
+                    placeholder="Opcional"
+                  />
+                </label>
+              </div>
+
+              <p className="knockout-editor-help">
+                Si hay empate en goles, completa ambos penales para definir al ganador.
+              </p>
+
+              {editorValidation?.error && (
+                <p className="knockout-editor-error">{editorValidation.error}</p>
+              )}
+
+              <div className="knockout-editor-actions">
+                <button type="button" className="knockout-editor-btn ghost" onClick={closeEditor}>Cancelar</button>
+                <button type="button" className="knockout-editor-btn" onClick={handleSaveMatch}>Guardar</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
