@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { collection, onSnapshot } from 'firebase/firestore'
-import GroupModal from '../GroupModal/GroupModal.tsx'
-import KnockoutModal from '../KnockoutModal/KnockoutModal.tsx'
 import { matchesData, type Match } from '../../data/groups.ts'
 import { db } from '../../firebase.ts'
 import './Menu.css'
+
+const GroupModal = lazy(() => import('../GroupModal/GroupModal.tsx'))
+const KnockoutModal = lazy(() => import('../KnockoutModal/KnockoutModal.tsx'))
 
 interface MenuProps {
   isAdmin: boolean
@@ -209,19 +210,23 @@ const Menu = ({ isAdmin, onLogout }: MenuProps) => {
       </div>
 
       {isGroupModalOpen && (
-        <GroupModal
-          onClose={() => setIsGroupModalOpen(false)}
-          isAdmin={isAdmin}
-          onLogout={onLogout}
-          initialGroup={initialGroup}
-        />
+        <Suspense fallback={null}>
+          <GroupModal
+            onClose={() => setIsGroupModalOpen(false)}
+            isAdmin={isAdmin}
+            onLogout={onLogout}
+            initialGroup={initialGroup}
+          />
+        </Suspense>
       )}
 
       {isKnockoutModalOpen && (
-        <KnockoutModal
-          onClose={() => setIsKnockoutModalOpen(false)}
-          isAdmin={isAdmin}
-        />
+        <Suspense fallback={null}>
+          <KnockoutModal
+            onClose={() => setIsKnockoutModalOpen(false)}
+            isAdmin={isAdmin}
+          />
+        </Suspense>
       )}
     </>
   )
