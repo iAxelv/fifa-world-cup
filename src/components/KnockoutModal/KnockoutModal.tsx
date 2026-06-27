@@ -117,33 +117,30 @@ const formatDateTime = (dateString: string) => {
 }
 
 const assignThirds = (bestThirds: Array<Team & { group: string }>) => {
-  const slots = ['3-ABCDF', '3-CDFGH', '3-BEFIJ', '3-AEHIJ', '3-CEFHI', '3-EHIJK', '3-EFGIJ', '3-DEIJL']
+  const slots = ['3-CDFGH', '3-ABCDF', '3-BEFIJ', '3-AEHIJ', '3-CEFHI', '3-EHIJK', '3-EFGIJ', '3-DEIJL']
   const assignments: Record<string, Team> = {}
-
+  
   const resolve = (slotIndex: number, availableTeams: Array<Team & { group: string }>) => {
     if (slotIndex >= slots.length) return true
-
     const slot = slots[slotIndex]
     const allowedGroups = slot.split('-')[1].split('')
-
+    
     for (let i = 0; i < availableTeams.length; i++) {
       const candidate = availableTeams[i]
       if (!allowedGroups.includes(candidate.group)) continue
-
+      
       assignments[slot] = candidate
       const remaining = [...availableTeams]
       remaining.splice(i, 1)
-
+      
       if (resolve(slotIndex + 1, remaining)) {
         return true
       }
-
       delete assignments[slot]
     }
-
     return false
   }
-
+  
   resolve(0, bestThirds)
   return assignments
 }
@@ -241,20 +238,17 @@ const resolveWinnerAndLoser = (
   }
   const homeTeam = { id: home.id, name: home.name } as Team
   const awayTeam = { id: away.id, name: away.name } as Team
-
   if (result.homeGoals > result.awayGoals) {
     return { winner: homeTeam, loser: awayTeam }
   }
   if (result.awayGoals > result.homeGoals) {
     return { winner: awayTeam, loser: homeTeam }
   }
-
   const homePens = result.homePenalties
   const awayPens = result.awayPenalties
   if (homePens === null || homePens === undefined || awayPens === null || awayPens === undefined || homePens === awayPens) {
     return null
   }
-
   return homePens > awayPens
     ? { winner: homeTeam, loser: awayTeam }
     : { winner: awayTeam, loser: homeTeam }
@@ -316,7 +310,6 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
   const [localKnockoutPredictions, setLocalKnockoutPredictions] = useState<KnockoutPredictions>(() => readLocalKnockoutPredictions())
   const [editingMatch, setEditingMatch] = useState<KnockoutMatch | null>(null)
   const [editingDraft, setEditingDraft] = useState<EditingDraft>({ homeGoals: '', awayGoals: '', homePenalties: '', awayPenalties: '' })
-  
   const viewportRef = useRef<HTMLDivElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
   const dragStart = useRef({ x: 0, y: 0 })
@@ -349,7 +342,6 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
         changed = true
       }
     })
-
     if (changed) {
       setLocalKnockoutPredictions(cleaned)
       persistLocalKnockoutPredictions(cleaned)
@@ -375,22 +367,26 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
       acc[groupKey] = initialGroups[groupKey].map(cloneTeamWithZeroStats)
       return acc
     }, {} as Record<string, Team[]>)
+
     Object.keys(liveMatchesData).forEach((groupKey) => {
       const teamsById = base[groupKey].reduce((acc, team) => {
         acc[team.id] = team
         return acc
       }, {} as Record<string, Team>)
+
       liveMatchesData[groupKey].forEach((match) => {
         if (match.homeGoals === null || match.awayGoals === null) return
         const homeTeam = teamsById[match.home.id]
         const awayTeam = teamsById[match.away.id]
         if (!homeTeam || !awayTeam) return
+
         homeTeam.pj += 1
         awayTeam.pj += 1
         homeTeam.gf += match.homeGoals
         homeTeam.gc += match.awayGoals
         awayTeam.gf += match.awayGoals
         awayTeam.gc += match.homeGoals
+
         if (match.homeGoals > match.awayGoals) {
           homeTeam.g += 1
           awayTeam.p += 1
@@ -415,14 +411,14 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
     const firsts: Record<string, Team> = {}
     const seconds: Record<string, Team> = {}
     const thirds: Array<Team & { group: string }> = []
-    
+     
     Object.keys(liveGroupsData).forEach(group => {
       const teams = liveGroupsData[group]
       if (teams[0]) firsts[group] = teams[0]
       if (teams[1]) seconds[group] = teams[1]
       if (teams[2]) thirds.push({ ...teams[2], group })
     })
-    
+     
     const bestThirds = (sortTeams(thirds) as Array<Team & { group: string }>).slice(0, 8)
     return { firsts, seconds, bestThirds }
   }, [liveGroupsData])
@@ -534,7 +530,6 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
         }
       }
     }
-
     const local = localKnockoutPredictions[matchId]
     if (local) {
       return {
@@ -547,7 +542,6 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
         }
       }
     }
-
     return { source: 'none' as const, result: null }
   }, [officialResults, localKnockoutPredictions])
 
@@ -585,10 +579,8 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
       )
       return
     }
-
     const resolved = resolveWinnerAndLoser(match.home, match.away, result)
     const winner = resolved ? resolved.winner.id : null
-
     await setDoc(
       doc(db, 'worldcup', match.id),
       {
@@ -606,11 +598,9 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
   const buildResultFromDraft = useCallback((draft: EditingDraft): DraftValidation => {
     const homeGoals = parseOptionalGoal(draft.homeGoals)
     const awayGoals = parseOptionalGoal(draft.awayGoals)
-
     if (homeGoals === null && awayGoals === null) {
       return { result: null, error: null }
     }
-
     if (homeGoals === null || awayGoals === null) {
       return { result: null, error: 'Completa ambos marcadores o deja ambos vacios.' }
     }
@@ -629,11 +619,9 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
         error: null
       }
     }
-
     if ((homePenalties === null) !== (awayPenalties === null)) {
       return { result: null, error: 'Si empatan, debes completar ambos penales.' }
     }
-
     if (homePenalties === null && awayPenalties === null) {
       return {
         result: {
@@ -645,11 +633,9 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
         error: null
       }
     }
-
     if (homePenalties === awayPenalties) {
       return { result: null, error: 'Los penales no pueden terminar empatados.' }
     }
-
     return {
       result: {
         homeGoals,
@@ -701,13 +687,11 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
     if (validation.error) {
       return
     }
-
     if (isAdmin) {
       await updateOfficialKnockoutResult(editingMatch, validation.result)
     } else {
       updateLocalKnockoutPrediction(editingMatch.id, validation.result)
     }
-
     closeEditor()
   }
 
@@ -916,13 +900,11 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
             </div>
           </div>
         </div>
-
         {editingMatch && (
           <div className="knockout-editor-overlay" onClick={closeEditor}>
             <div className="knockout-editor-modal" onClick={(e) => e.stopPropagation()}>
               <h3 className="knockout-editor-title">Editar Resultado</h3>
               <MatchBox match={editingMatch} side="center" />
-
               <div className="knockout-editor-grid">
                 <label>
                   <span>{editingMatch.home.name}</span>
@@ -965,15 +947,12 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
                   />
                 </label>
               </div>
-
               <p className="knockout-editor-help">
                 Si hay empate en goles, completa ambos penales para definir al ganador.
               </p>
-
               {editorValidation?.error && (
                 <p className="knockout-editor-error">{editorValidation.error}</p>
               )}
-
               <div className="knockout-editor-actions">
                 <button type="button" className="knockout-editor-btn ghost" onClick={closeEditor}>Cancelar</button>
                 <button type="button" className="knockout-editor-btn" onClick={handleSaveMatch}>Guardar</button>
