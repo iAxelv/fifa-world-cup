@@ -24,6 +24,16 @@ html, body {
   position: relative;
 }
 
+.app-container > .main-title,
+.app-container > .menu-container {
+  transition: filter 0.2s ease;
+}
+
+.app-container:has(.modal-overlay) > .main-title,
+.app-container:has(.modal-overlay) > .menu-container {
+  filter: blur(8px);
+}
+
 .admin-login-overlay {
   position: fixed;
   inset: 0;
