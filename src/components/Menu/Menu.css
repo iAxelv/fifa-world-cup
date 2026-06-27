@@ -19,6 +19,9 @@
   top: 58%;
   left: 50%;
   transform: translate(-50%, -50%);
+  width: 100%;
+  padding-inline: clamp(10px, 2.4vw, 24px);
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -29,7 +32,7 @@
   display: grid;
   gap: 18px;
   justify-items: center;
-  width: min(92vw, 760px);
+  width: min(100%, 760px);
 }
 
 .menu-buttons-row {
@@ -46,7 +49,7 @@
   padding: 20px 40px;
   color: white;
   font-family: 'Montserrat', sans-serif;
-  font-size: 1.5rem;
+  font-size: clamp(1rem, 2.8vw, 1.5rem);
   font-weight: 700;
   cursor: pointer;
   backdrop-filter: blur(8px);
@@ -91,7 +94,7 @@
   border: 2px solid var(--today-border);
   border-radius: 15px;
   padding: 26px 18px 18px;
-  width: min(88vw, 520px);
+  width: min(100%, 520px);
   margin-left: auto;
   margin-right: auto;
   color: white;
@@ -149,7 +152,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 300px;
+  max-height: min(52svh, 430px);
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -303,16 +306,22 @@
 }
 
 @media (max-width: 1040px) {
-  .menu-container {
-    width: min(92vw, 720px);
-  }
-
   .menu-buttons-row {
     grid-template-columns: 1fr;
     gap: 16px;
   }
 
   .today-matches-container {
-    width: min(90vw, 500px);
+    width: min(100%, 500px);
+  }
+}
+
+@media (max-height: 700px) {
+  .menu-main-actions {
+    gap: 12px;
+  }
+
+  .today-matches-list {
+    max-height: min(44svh, 320px);
   }
 }

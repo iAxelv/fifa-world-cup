@@ -1,9 +1,9 @@
 .knockout-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
+  height: 100svh;
   background-color: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -16,8 +16,9 @@
   background-color: rgba(10, 15, 30, 0.75);
   border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 20px;
-  width: 98vw;
-  height: 96vh;
+  width: min(98vw, 1600px);
+  height: min(96dvh, 1200px);
+  height: min(96svh, 1200px);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -395,5 +396,26 @@
 @media (max-width: 680px) {
   .knockout-editor-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .knockout-content {
+    width: 100vw;
+    height: 100dvh;
+    height: 100svh;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .knockout-title {
+    font-size: clamp(1.35rem, 6vw, 2rem);
+    letter-spacing: 1px;
+    margin-top: 16px;
+  }
+
+  .knockout-board {
+    padding: 64px 40px;
   }
 }

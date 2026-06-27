@@ -1,14 +1,18 @@
 .main-title {
-  position: absolute;
-  top: 5%;
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative;
+  top: 0;
+  left: auto;
+  transform: none;
   font-family: 'Montserrat', sans-serif;
-  font-size: 3.5rem;
+  font-size: clamp(1.6rem, 5.4vw, 3.5rem);
   color: rgba(255, 255, 255, 0.85);
   text-shadow: 0px 4px 15px rgba(0, 0, 0, 0.6);
   margin: 0;
   text-align: center;
-  letter-spacing: 2px;
+  letter-spacing: clamp(0.6px, 0.25vw, 2px);
+  line-height: 1.1;
+  width: min(94vw, 980px);
+  padding: 0 10px;
+  box-sizing: border-box;
   z-index: 10;
 }
