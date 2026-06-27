@@ -368,6 +368,25 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
   }, [])
 
   useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow
+    const previousBodyOverscroll = document.body.style.overscrollBehavior
+    const previousRootOverflow = document.documentElement.style.overflow
+    const previousRootOverscroll = document.documentElement.style.overscrollBehavior
+
+    document.body.style.overflow = 'hidden'
+    document.body.style.overscrollBehavior = 'none'
+    document.documentElement.style.overflow = 'hidden'
+    document.documentElement.style.overscrollBehavior = 'none'
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow
+      document.body.style.overscrollBehavior = previousBodyOverscroll
+      document.documentElement.style.overflow = previousRootOverflow
+      document.documentElement.style.overscrollBehavior = previousRootOverscroll
+    }
+  }, [])
+
+  useEffect(() => {
     const cleaned = { ...localKnockoutPredictions }
     let changed = false
     Object.entries(officialResults).forEach(([matchId, official]) => {
@@ -821,6 +840,11 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
     setPosition((current) => clampPosition(current, boundedScale))
   }
 
+  const blockWheelPropagation = (e: WheelEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
   const handleMouseDown = (e: MouseEvent) => {
     if (isMobile) {
       return
@@ -959,8 +983,8 @@ const KnockoutModal = ({ onClose, isAdmin }: KnockoutModalProps) => {
   const editorValidation = editingMatch ? buildResultFromDraft(editingDraft) : null
 
   return (
-    <div className="knockout-overlay" onClick={onClose}>
-      <div className={`knockout-content ${isMobile ? 'is-mobile' : 'is-desktop'}`} onClick={(e) => e.stopPropagation()}>
+    <div className="knockout-overlay" onClick={onClose} onWheel={blockWheelPropagation}>
+      <div className={`knockout-content ${isMobile ? 'is-mobile' : 'is-desktop'}`} onClick={(e) => e.stopPropagation()} onWheel={blockWheelPropagation}>
         <button className="knockout-close-button" onClick={onClose}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
