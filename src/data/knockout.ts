@@ -79,7 +79,7 @@ export const knockoutData: KnockoutData = {
   rightRoundOf32: [
     createMatch('R32-1', '2026-06-29T17:00:00Z', '1C', '2F'),
     createMatch('R32-2', '2026-06-30T17:00:00Z', '2E', '2I'),
-    createMatch('R32-3', '2026-06-30T01:00:00Z', '1A', '3-CEFHI'),
+    createMatch('R32-3', '2026-07-01T01:00:00Z', '1A', '3-CEFHI'),
     createMatch('R32-4', '2026-07-01T16:00:00Z', '1L', '3-EHIJK'),
     createMatch('R32-5', '2026-07-03T22:00:00Z', '1J', '2H'),
     createMatch('R32-6', '2026-07-03T18:00:00Z', '2D', '2G'),
